@@ -1,1 +1,42 @@
-#
+# This workflow is designed to be called by other workflows in the repository. It verifies that a Spring Boot service builds and passes tests using Maven. The Java version and working directory can be customized through inputs.
+name: Java CI
+
+on:
+  workflow_call:
+    inputs:
+      java-version:
+        description: "Java version used by the service"
+        required: false
+        type: string
+        default: "25"
+      working-directory:
+        description: "Directory where pom.xml and mvnw are located"
+        required: false
+        type: string
+        default: "."
+
+jobs:
+  verify:
+    name: Verify Spring Boot service
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+
+    steps:
+      - name: Checkout service repository
+        uses: actions/checkout@v4
+
+      - name: Setup Temurin JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ inputs.java-version }}
+          cache: maven
+
+      - name: Ensure Maven wrapper is executable
+        run: chmod +x ./mvnw
+
+      - name: Run Maven verify
+        run: ./mvnw clean verify
