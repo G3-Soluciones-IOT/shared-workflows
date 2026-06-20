@@ -1,1 +1,85 @@
-#
+name: Docker Build
+
+on:
+  workflow_call:
+    inputs:
+      service-name:
+        description: "Docker image/service name"
+        required: true
+        type: string
+
+      java-version:
+        description: "Java version used by the service"
+        required: false
+        type: string
+        default: "25"
+
+      working-directory:
+        description: "Directory where pom.xml and mvnw are located"
+        required: false
+        type: string
+        default: "."
+
+      dockerfile-path:
+        description: "Dockerfile path relative to working-directory"
+        required: false
+        type: string
+        default: "Dockerfile"
+
+      image-tag:
+        description: "Local image tag used for validation"
+        required: false
+        type: string
+        default: "local"
+
+      skip-tests:
+        description: "Whether to skip tests during package phase"
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  docker-build:
+    name: Build Docker image
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+
+    steps:
+      - name: Checkout service repository
+        uses: actions/checkout@v4
+
+      - name: Setup Temurin JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ inputs.java-version }}
+          cache: maven
+
+      - name: Ensure Maven wrapper is executable
+        run: chmod +x ./mvnw
+
+      - name: Package service
+        run: |
+          if [ "${{ inputs.skip-tests }}" = "true" ]; then
+            ./mvnw clean package -DskipTests
+          else
+            ./mvnw clean package
+          fi
+
+      - name: Verify generated JAR
+        run: |
+          ls -lah target
+          test -n "$(find target -maxdepth 1 -name '*.jar' ! -name '*.original' -print -quit)"
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            -f "${{ inputs.dockerfile-path }}" \
+            -t "${{ inputs.service-name }}:${{ inputs.image-tag }}" \
+            .
+
+      - name: Inspect Docker image
+        run: docker image inspect "${{ inputs.service-name }}:${{ inputs.image-tag }}" >/dev/null
