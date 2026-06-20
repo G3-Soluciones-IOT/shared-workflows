@@ -32,12 +32,6 @@ on:
         type: string
         default: "local"
 
-      skip-tests:
-        description: "Whether to skip tests during package phase"
-        required: false
-        type: boolean
-        default: true
-
 jobs:
   docker-build:
     name: Build Docker image
@@ -61,18 +55,18 @@ jobs:
       - name: Ensure Maven wrapper is executable
         run: chmod +x ./mvnw
 
-      - name: Package service
-        run: |
-          if [ "${{ inputs.skip-tests }}" = "true" ]; then
-            ./mvnw clean package -DskipTests
-          else
-            ./mvnw clean package
-          fi
+      - name: Verify and package service
+        run: ./mvnw -B clean verify
 
       - name: Verify generated JAR
         run: |
           ls -lah target
-          test -n "$(find target -maxdepth 1 -name '*.jar' ! -name '*.original' -print -quit)"
+          JAR_COUNT=$(find target -maxdepth 1 -name '*.jar' ! -name '*.original' | wc -l)
+
+          if [ "$JAR_COUNT" -lt 1 ]; then
+            echo "No runnable JAR found in target/"
+            exit 1
+          fi
 
       - name: Build Docker image
         run: |
