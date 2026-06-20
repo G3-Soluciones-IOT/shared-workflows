@@ -1,1 +1,127 @@
-#
+name: GCP Artifact Registry Push
+
+on:
+  workflow_call:
+    inputs:
+      service_name:
+        description: "Service name and Docker image name"
+        required: true
+        type: string
+
+      gcp_project_id:
+        description: "GCP Project ID"
+        required: true
+        type: string
+
+      gcp_region:
+        description: "GCP region where Artifact Registry is located"
+        required: true
+        type: string
+
+      gar_repository:
+        description: "Artifact Registry Docker repository name"
+        required: true
+        type: string
+
+      workload_identity_provider:
+        description: "GCP Workload Identity Provider resource name"
+        required: true
+        type: string
+
+      service_account:
+        description: "GCP Service Account used by GitHub Actions"
+        required: true
+        type: string
+
+      dockerfile_path:
+        description: "Path to Dockerfile"
+        required: false
+        type: string
+        default: "Dockerfile"
+
+      build_context:
+        description: "Docker build context"
+        required: false
+        type: string
+        default: "."
+
+      push_latest:
+        description: "Whether to also push dev-latest tag"
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build-and-push:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout caller repository
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ inputs.workload_identity_provider }}
+          service_account: ${{ inputs.service_account }}
+
+      - name: Setup Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: |
+          gcloud auth configure-docker "${{ inputs.gcp_region }}-docker.pkg.dev" --quiet
+
+      - name: Compute image metadata
+        id: meta
+        shell: bash
+        run: |
+          SHORT_SHA="${GITHUB_SHA::7}"
+
+          IMAGE_BASE="${{ inputs.gcp_region }}-docker.pkg.dev/${{ inputs.gcp_project_id }}/${{ inputs.gar_repository }}/${{ inputs.service_name }}"
+          IMAGE_SHA="${IMAGE_BASE}:sha-${SHORT_SHA}"
+          IMAGE_LATEST="${IMAGE_BASE}:dev-latest"
+
+          echo "image_base=${IMAGE_BASE}" >> "$GITHUB_OUTPUT"
+          echo "image_sha=${IMAGE_SHA}" >> "$GITHUB_OUTPUT"
+          echo "image_latest=${IMAGE_LATEST}" >> "$GITHUB_OUTPUT"
+
+          echo "IMAGE_BASE=${IMAGE_BASE}"
+          echo "IMAGE_SHA=${IMAGE_SHA}"
+          echo "IMAGE_LATEST=${IMAGE_LATEST}"
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            -f "${{ inputs.dockerfile_path }}" \
+            -t "${{ steps.meta.outputs.image_sha }}" \
+            "${{ inputs.build_context }}"
+
+      - name: Tag dev-latest
+        if: ${{ inputs.push_latest }}
+        run: |
+          docker tag \
+            "${{ steps.meta.outputs.image_sha }}" \
+            "${{ steps.meta.outputs.image_latest }}"
+
+      - name: Push sha tag
+        run: |
+          docker push "${{ steps.meta.outputs.image_sha }}"
+
+      - name: Push dev-latest tag
+        if: ${{ inputs.push_latest }}
+        run: |
+          docker push "${{ steps.meta.outputs.image_latest }}"
+
+      - name: Show pushed images
+        run: |
+          echo "Pushed:"
+          echo "${{ steps.meta.outputs.image_sha }}"
+          if [ "${{ inputs.push_latest }}" = "true" ]; then
+            echo "${{ steps.meta.outputs.image_latest }}"
+          fi
