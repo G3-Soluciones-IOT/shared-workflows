@@ -35,6 +35,14 @@ jobs:
           java-version: ${{ inputs.java-version }}
           cache: maven
 
+      - name: Normalize Maven wrapper files
+        shell: bash
+        run: |
+          sed -i 's/\r$//' .mvn/wrapper/maven-wrapper.properties mvnw
+          if [ "$(tail -c 1 .mvn/wrapper/maven-wrapper.properties | wc -l)" -eq 0 ]; then
+            printf '\n' >> .mvn/wrapper/maven-wrapper.properties
+          fi
+
       - name: Ensure Maven wrapper is executable
         run: chmod +x ./mvnw
 
