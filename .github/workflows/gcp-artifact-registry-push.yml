@@ -46,10 +46,10 @@ on:
         default: "."
 
       push_latest:
-        description: "Whether to also push dev-latest tag"
+        description: "Whether to also push a mutable dev-latest tag"
         required: false
         type: boolean
-        default: true
+        default: false
 
 permissions:
   contents: read
