@@ -51,6 +51,17 @@ on:
         type: boolean
         default: false
 
+    outputs:
+      image_tag:
+        description: "Immutable image tag, for example sha-a1b2c3d"
+        value: ${{ jobs.build-and-push.outputs.image_tag }}
+      image_sha:
+        description: "Fully qualified immutable image reference"
+        value: ${{ jobs.build-and-push.outputs.image_sha }}
+      image_latest:
+        description: "Fully qualified dev-latest image reference"
+        value: ${{ jobs.build-and-push.outputs.image_latest }}
+
 permissions:
   contents: read
   id-token: write
@@ -59,6 +70,10 @@ jobs:
   build-and-push:
     name: Build and Push Docker Image
     runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.meta.outputs.image_tag }}
+      image_sha: ${{ steps.meta.outputs.image_sha }}
+      image_latest: ${{ steps.meta.outputs.image_latest }}
 
     steps:
       - name: Checkout caller repository
@@ -84,14 +99,17 @@ jobs:
           SHORT_SHA="${GITHUB_SHA::7}"
 
           IMAGE_BASE="${{ inputs.gcp_region }}-docker.pkg.dev/${{ inputs.gcp_project_id }}/${{ inputs.gar_repository }}/${{ inputs.service_name }}"
+          IMAGE_TAG="sha-${SHORT_SHA}"
           IMAGE_SHA="${IMAGE_BASE}:sha-${SHORT_SHA}"
           IMAGE_LATEST="${IMAGE_BASE}:dev-latest"
 
           echo "image_base=${IMAGE_BASE}" >> "$GITHUB_OUTPUT"
+          echo "image_tag=${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
           echo "image_sha=${IMAGE_SHA}" >> "$GITHUB_OUTPUT"
           echo "image_latest=${IMAGE_LATEST}" >> "$GITHUB_OUTPUT"
 
           echo "IMAGE_BASE=${IMAGE_BASE}"
+          echo "IMAGE_TAG=${IMAGE_TAG}"
           echo "IMAGE_SHA=${IMAGE_SHA}"
           echo "IMAGE_LATEST=${IMAGE_LATEST}"
 
